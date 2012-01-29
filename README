@@ -1,0 +1,46 @@
+This class provides a simple interface for OAuth 2.0.
+
+- OAuth 2.0 draft 12 supported (default mode: draft 10) .
+- The library requires PHP >= 5.3.
+- The http request engine depends on the PHP stream or curl extension with SSL/TLS.
+- A fallback mode for ealier draft version of OAuth 2.0 supported.
+  (for Facebook)
+- the file upload can be detected if the leading char of value is '@'.
+- MAC, BEARER Authorization header supported.
+
+ @author Rui Hirokawa <rui_hirokawa at yahoo.co.jp>
+ @copyright Copyright (c) 2011, Rui Hirokawa
+ @license http://www.opensource.org/licenses/mit-license.php MIT
+
+Usage:
+
+<code>
+   // for Facebook OAuth 2.0
+   $url = "https://graph.facebook.com/me/feed";
+
+   $entry = array('callback'=>'http://www.example.com/ws_fb.php',
+   'authorize'=>'https://graph.facebook.com/oauth/authorize',
+   'access_token'=>'https://graph.facebook.com/oauth/access_token');
+
+   $opts = array('redirect_uri'=>$entry['callback'],
+   'scope'=>'read_stream,offline_access,publish_stream');
+
+   $copts = array('cainfo'=>CAFILE); // can be ignored if cainfo available
+   $oauth = new LightOAuth2(CLIENT_ID, CLIENT_SECRET, $copts);
+   
+   session_start();
+   if (!isset($_SESSION['access_token'])) {
+    if (!isset($_GET['code'])) {
+      $url = $oauth->getAuthUrl($entry['authorize'], $entry['callback'], $opts);
+      header("Location: " . $url);
+      exit();
+    }
+    $obj = $oauth->getToken($entry['access_token'], $entry['callback'],
+                           $_GET['code'], 'json');
+    $_SESSION['access_token'] = $obj->access_token;
+   }
+
+   // access to proteced resource
+   $oauth->setToken($_SESSION['access_token']);
+   $response = $oauth->fetch($url);
+</code>
