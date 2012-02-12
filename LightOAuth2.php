@@ -42,7 +42,7 @@
 
  The library requires PHP >= 5.3.
  @author Rui Hirokawa <rui_hirokawa at yahoo.co.jp>
- @copyright Copyright (c) 2011, Rui Hirokawa
+ @copyright Copyright (c) 2012, Rui Hirokawa
  @license http://www.opensource.org/licenses/mit-license.php MIT
 */
 class LightOAuth2 {
@@ -51,7 +51,7 @@ class LightOAuth2 {
   protected $client_id = null, $client_secret = null, $token = null;
   protected $copts = array('verify_peer'=>true, 
 			   'requestEngine'=>self::AUTH_ENGINE_CURL);
-  protected $credentials = 'OAuth';
+  protected $credentials = 'Bearer';
   protected $secret = null;
   protected $algorithm = 'hmac-sha-1'; 
   protected $auth_type = self::AUTH_TYPE_HEADER;
@@ -82,51 +82,49 @@ class LightOAuth2 {
    */
   protected function requestStream($url, $params = null, $method = 'GET', 
 				   $headers = array(), $code = 200) {
-    $opts = array('http'=> array('method' => $method, 
-				 'follow_location' => false),
-		  'ssl' => array('verify_peer' => $this->copts['verify_peer']));
-    if(isset($this->copts['cainfo'])) {
-      $opts['ssl']['cafile'] = $this->copts['cainfo'];
-    }
-
-    if (!empty($params)) {
-      if ($method == 'POST') {
-	if (is_array($params)) {
-	  $files = array();
-	  foreach($params as $key => $value) {
-	    if ($value[0] == '@') { // file attachment
-	      $files[$key] = substr($value, 1);
-	      unset($params[$key]);
-	    }
+	  $opts = array('http'=> array('method' => $method, 'follow_location' => false),
+					'ssl' => array('verify_peer' => $this->copts['verify_peer']));
+	  if(isset($this->copts['cainfo'])) {
+		  $opts['ssl']['cafile'] = $this->copts['cainfo'];
 	  }
-	  if (!empty($files)) {
-	    $boundary = "---------------------".substr(md5(rand(0,32000)), 0, 10); 
-	    $headers['Content-Type'] = "multipart/form-data; boundary=$boundary";
-	    $content = $this->buildFormData($params, $boundary);
-	  } else {
-	    $headers['Content-type'] = "application/x-www-form-urlencoded";
-	    $content = http_build_query($params);
-	  }
-	  $opts['http']['content'] = $content;		
-	} else {
-	  $opts['http']['content'] = $params;	  
-	}
-      } else if ($method == 'GET') {
-	$url .= '?' . http_build_query($params,'','&');
-      }
-    }
-    $header = '';
-    foreach($headers as $key => $value) {
-      $header .= "$key: $value\r\n";
-    }
-    $opts['http']['header'] = $header;
 
-    $context = stream_context_create($opts);
-    $result = file_get_contents($url, false, $context);
-    if (!$result || !strpos($http_response_header[0], (string)$code)) {
-      throw new RuntimeException($http_response_header[0]);
-    }
-    return $result;
+	  if (!empty($params)) {
+		  if ($method == 'POST') {
+			  if (is_array($params)) {
+				  $files = array();
+				  foreach($params as $key => $value) {
+					  if ($value[0] == '@') { // file attachment
+						  $files[$key] = substr($value, 1);
+						  unset($params[$key]);
+					  }
+				  }
+				  if (!empty($files)) {
+					  $boundary = "---------------------".substr(md5(rand(0,32000)), 0, 10); 
+					  $headers['Content-Type'] = "multipart/form-data; boundary=$boundary";
+					  $content = $this->buildFormData($params, $boundary);
+				  } else {
+					  $headers['Content-type'] = "application/x-www-form-urlencoded";
+					  $content = http_build_query($params);
+				  }
+				  $opts['http']['content'] = $content;
+			  } else {
+				  $opts['http']['content'] = $params;
+			  }
+		  } else if ($method == 'GET') {
+			  $url .= '?' . http_build_query($params,'','&');
+		  }
+	  }
+	  $header = '';
+	  foreach($headers as $key => $value) {
+		  $header .= "$key: $value\r\n";
+	  }
+	  $opts['http']['header'] = $header;
+	  $context = stream_context_create($opts);
+	  $result = file_get_contents($url, false, $context);
+	  if (!$result || !strpos($http_response_header[0], (string)$code)) {
+		  throw new RuntimeException($http_response_header[0]);
+	  }
+	  return $result;
   }
   
   /**
@@ -140,42 +138,43 @@ class LightOAuth2 {
    * @returns the response string
    */
   protected function requestCurl($url, $params = null, $method = 'GET', 
-				   $headers = array(), $code = 200) {
-    $opts = array(CURLOPT_RETURNTRANSFER => true,
-		  CURLOPT_SSL_VERIFYPEER => true);
-    if ($method == 'POST') {
-      $opts[CURLOPT_POST] = true; 
-	  if (!is_null($params)) {
-		  $opts[CURLOPT_POSTFIELDS] = $params; 
+								 $headers = array(), $code = 200) {
+	  $opts = array(CURLOPT_RETURNTRANSFER => true,
+					CURLOPT_SSL_VERIFYPEER => true);
+
+	  if ($method == 'POST' || $method == 'PUT') {
+		  if (!is_null($params)) {
+			  $opts[CURLOPT_POSTFIELDS] = $params;
+		  }
+	  } elseif ($method == 'GET') {
+		  if (!is_null($params)) {
+			  $url .= '?'. http_build_query($params,'','&');
+		  }
 	  }
-    } elseif ($method == 'GET') {
-		if (!is_null($params)) {
-			$url .= '?'. http_build_query($params,'','&');
-		}
-    }
 
-    $opts[CURLOPT_URL] = $url;
-    if(isset($this->copts['cainfo'])) {
-      $opts[CURLOPT_CAINFO] = $this->copts['cainfo'];
-    }
+	  $opts[CURLOPT_CUSTOMREQUEST] = $method;
+	  $opts[CURLOPT_URL] = $url;
+	  if(isset($this->copts['cainfo'])) {
+		  $opts[CURLOPT_CAINFO] = $this->copts['cainfo'];
+	  }
 
-    if (!empty($headers)) {
-      $header = array();
-      foreach($headers as $key => $value) {
-	$header[] .= "$key: $value\r\n";
-      }
-      $opts[CURLOPT_HTTPHEADER] = $header;
-    }
+	  if (!empty($headers)) {
+		  $header = array();
+		  foreach($headers as $key => $value) {
+			  $header[] = "$key: $value";
+		  }
+		  $opts[CURLOPT_HTTPHEADER] = $header;
+	  }
+	  $ch = curl_init();
+	  curl_setopt_array($ch, $opts);
+	  $result = curl_exec($ch);
+	  $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 
-    $ch = curl_init();
-    curl_setopt_array($ch, $opts);
-    $result = curl_exec($ch);
-    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    if (!$result || $http_code != $code) {
-      throw new RuntimeException('returned code: '.$http_code);
-    }
-    curl_close($ch);
-    return $result;
+	  if (intval($http_code) != $code) {
+		  throw new RuntimeException("returned code: $http_code");
+	  }
+	  curl_close($ch);
+	  return $result;
   }
 
   /**
@@ -188,29 +187,30 @@ class LightOAuth2 {
    * @return an object including the access_token
    */
   public function getToken($url, $callback = null, $token = null, $type = 'json') {
-    $gtype = empty($callback) ? 'refresh_token' : 'authorization_code';
-    $params = array('grant_type'=>$gtype,
-      'client_id'=>$this->client_id, 'client_secret'=>$this->client_secret);
-    if ($gtype == 'authorization_code') {
-      $params['code'] = $token;
-      $params['redirect_uri'] = $callback;
-    } else { // refresh_token
-      $params['refresh_token'] = $token;
-    }
+	  $gtype = empty($callback) ? 'refresh_token' : 'authorization_code';
+	  $params = array('grant_type'=>$gtype,
+					  'client_id'=>$this->client_id, 'client_secret'=>$this->client_secret);
+	  if ($gtype == 'authorization_code') {
+		  $params['code'] = $token;
+		  $params['redirect_uri'] = $callback;
+	  } else { // refresh_token
+		  $params['refresh_token'] = $token;
+	  }
+	  
+	  if ($this->copts['requestEngine'] == self::AUTH_ENGINE_STREAM) {
+		  $result = $this->requestStream($url, $params, 'POST', null, 200);
+	  } else {
+		  $result = $this->requestCurl($url, $params, 'POST', null, 200);
+	  }
 
-    if ($this->copts['requestEngine'] == self::AUTH_ENGINE_STREAM) {
-      $result = $this->requestStream($url, $params, 'POST', null, 200);
-    } else {
-      $result = $this->requestCurl($url, $params, 'POST', null, 200);
-    }
+	  if ($type == 'json') {
+		  $obj = json_decode($result); 
+	  } else {
+		  parse_str($result, $r);
+		  $obj = (object)$r;
+	  }
 
-    if ($type == 'json') {
-      $obj = json_decode($result); 
-    } else {
-      parse_str($result, $r);
-      $obj = (object)$r;
-    }
-    return $obj;
+	  return $obj;
   }
 
   /**
@@ -251,20 +251,20 @@ class LightOAuth2 {
    * @returns the response string
    */
   public function fetch($url, $params = null, $method = 'GET', 
-			$headers = array(), $code = 200){
-    if ($this->auth_type == self::AUTH_TYPE_HEADER) {
-      $sauth = $this->getAuthHeader($url, $this->token, $method);
-      $headers['Authorization'] = $sauth;
-    } else {
-      $params['access_token'] = $this->token;
-    }
-
-    if ($this->copts['requestEngine'] == self::AUTH_ENGINE_STREAM) {
-      $result = $this->requestStream($url, $params, $method, $headers, $code);
-    } else {
-      $result = $this->requestCurl($url, $params, $method, $headers, $code);
-    }
-    return $result;
+						$headers = array(), $code = 200){
+	  if ($this->auth_type == self::AUTH_TYPE_HEADER) {
+		  $sauth = $this->getAuthHeader($url, $this->token, $method);
+		  $headers['Authorization'] = $sauth;
+	  } else {
+		  $params['access_token'] = $this->token;
+	  }
+	  
+	  if ($this->copts['requestEngine'] == self::AUTH_ENGINE_STREAM) {
+		  $result = $this->requestStream($url, $params, $method, $headers, $code);
+	  } else {
+		  $result = $this->requestCurl($url, $params, $method, $headers, $code);
+	  }
+	  return $result;
   }
 
   /**
@@ -302,11 +302,11 @@ class LightOAuth2 {
   /**
    * set credentials
    *
-   * @param $credentials credentials: 'OAuth'(draft 10),'MAC' or 'BEARER'
+   * @param $credentials credentials: 'OAuth'(draft 10),'MAC' or 'Bearer'
    * @param $secret token secret
    * @param $algorithm hash-mac algorithm ('hmac-sha-1' or 'hmac-sha-256')
    */
-  public function setCredentials($credentials = 'OAuth', $secret = null, 
+  public function setCredentials($credentials = 'Bearer', $secret = null, 
 			$algorithm = 'hmac-sha-1') {
     $this->credentials = $credentials;
     $this->secret  = $secret;
@@ -340,7 +340,7 @@ class LightOAuth2 {
   }
   
   /**
-   * generate Authorization header based on OAuth2 draft 12
+   * generate Authorization header
    *
    * @param $url the target url
    * @param $token token
@@ -351,16 +351,16 @@ class LightOAuth2 {
    */
   public function getAuthHeader($url, $token, $method = HTTP_METH_GET, 
 			 $timestamp = null, $nonce = null) {
-    if (!empty($this->secret)) {
+	  if (strtolower($this->credentials) == 'mac' && !empty($this->secret)) {
       $timestamp = $timestamp ?: time();
       $nonce = $nonce ?: md5(microtime(true) . rand(1, 999));
       $params = array('token'=>$token,
-		      'timestamp'=>$timestamp,
-		      'nonce'=>$nonce);    
+					  'timestamp'=>$timestamp,
+					  'nonce'=>$nonce);    
       $params['signature'] = $this->getSignature($url, $params, $this->secret);
       $head = '';
       foreach($params as $key => $value) {
-	$head .= ",$key=\"$value\"";
+		  $head .= ",$key=\"$value\"";
       }
       $token = substr($head, 1);
     }
@@ -374,20 +374,20 @@ class LightOAuth2 {
    * @returns string based on RFC-3986
    */
   protected function normalized_query($query) {
-    $v = explode('&',$query);
-    $q = array();
-    foreach($v as $key) {
-      if (strpos($key,'=')) {
-	list($key, $value) = explode('=',$key);
-	$value = rawurlencode(urldecode($value));
-      } else {
-	$value = '';
-      }
-      $key = rawurlencode(urldecode($key));
-      $q[] = "$key=$value";
-    }
-    sort($q);
-    return implode("\n",$q)."\n";
+	  $v = explode('&',$query);
+	  $q = array();
+	  foreach($v as $key) {
+		  if (strpos($key,'=')) {
+			  list($key, $value) = explode('=',$key);
+			  $value = rawurlencode(urldecode($value));
+		  } else {
+			  $value = '';
+		  }
+		  $key = rawurlencode(urldecode($key));
+		  $q[] = "$key=$value";
+	  }
+	  sort($q);
+	  return implode("\n",$q)."\n";
   }
 }
 ?>
