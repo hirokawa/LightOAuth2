@@ -108,7 +108,7 @@ class LightOAuth2 {
 				  }
 				  $opts['http']['content'] = $content;
 			  } else {
-				  $opts['http']['content'] = $params;
+				  $opts['http']['content'] = http_build_query($params);
 			  }
 		  } else if ($method == 'GET') {
 			  $url .= '?' . http_build_query($params,'','&');
